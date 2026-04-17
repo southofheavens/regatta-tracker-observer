@@ -25,7 +25,7 @@ tags:
     description: Операции с координатами участников
 
 paths:
-  /coordinates/{raceId}:
+  /observer/coordinates/{raceId}:
     get:
       summary: Получить координаты всех участников гонки
       description: |

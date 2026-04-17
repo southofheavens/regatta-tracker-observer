@@ -22,7 +22,6 @@ CoordinatesVector getCurrentParticipantsCoordinates
     Poco::Redis::PooledConnection & pc,
     RGT::Devkit::RaceId raceId
 )
-
 {
     static std::string luaScript = RGT::Devkit::readLuaScript("lua_scripts/get_current_coordinates.lua");
 
