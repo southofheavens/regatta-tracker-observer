@@ -1,0 +1,8 @@
+.vscode/
+
+subprojects/**
+!subprojects/*.wrap
+
+.DS_Store
+
+.env

@@ -1,0 +1,215 @@
+openapi: 3.0.3
+info:
+  title: Observer Service API
+  version: 1.0.0
+  description: |
+    API сервиса Observer для получения координат участников гонки.
+    
+    **Доступно только для судей (Judge)**, которые включены в судейскую бригаду конкретной гонки.
+  contact:
+    name: RGT Dev Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.rgt-observer.com/v1
+    description: Production
+  - url: https://dev-api.rgt-observer.com/v1
+    description: Development
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Coordinates
+    description: Операции с координатами участников
+
+paths:
+  /coordinates/{raceId}:
+    get:
+      summary: Получить координаты всех участников гонки
+      description: |
+        Возвращает объект, где ключи — `userId` (строка), а значения — 
+        либо координаты, либо `null`, если участник ещё не отправил данные.
+        
+        **Требования к доступу:**
+        - Роль пользователя: `Judge`
+        - Судья должен быть привязан к данной гонке 
+        - Статус гонки: `InProgress`
+      operationId: getRaceCoordinates
+      tags:
+        - Coordinates
+      parameters:
+        - name: raceId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+          description: Уникальный числовой идентификатор гонки
+          example: 42
+      responses:
+        '200':
+          description: Успешный ответ с координатами
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoordinatesResponse'
+              examples:
+                success:
+                  summary: Нормальный ответ
+                  value:
+                    "1001":
+                      longitude: 37.6173
+                      latitude: 55.7558
+                    "1002": null
+                    "1003":
+                      longitude: 30.5234
+                      latitude: 50.4501
+                all_null:
+                  summary: Никто ещё не отправил координаты
+                  value:
+                    "1001": null
+                    "1002": null
+        '400':
+          description: Неверный формат `raceId` или структуры URI
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: BAD_REQUEST
+                message: "The second segment in the uri should be a number, which is the race ID"
+        '401':
+          description: Отсутствует или невалиден JWT-токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: AUTH_FAILED
+                message: "Invalid or missing Authorization header"
+        '403':
+          description: Недостаточно прав (не Judge или не в бригаде)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                wrong_role:
+                  summary: Пользователь не судья
+                  value:
+                    code: FORBIDDEN
+                    message: "Only judge can view the coordinates of the participants"
+                not_assigned:
+                  summary: Судья не прикреплён к гонке
+                  value:
+                    code: FORBIDDEN
+                    message: "The judge is not part of the judging panel for the race with ID 42"
+        '404':
+          description: Гонка с таким `raceId` не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: NOT_FOUND
+                message: "The race with id 42 is not exists"
+        '409':
+          description: Некорректный статус гонки для запроса координат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                not_started:
+                  summary: Гонка ещё не стартовала
+                  value:
+                    code: CONFLICT
+                    message: "The race with id 42 hasn't started yet"
+                finished:
+                  summary: Гонка уже завершена
+                  value:
+                    code: CONFLICT
+                    message: "The race with id 42 already finished"
+        '500':
+          description: Внутренняя ошибка сервера (Redis, DB, парсинг)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: INTERNAL_ERROR
+                message: "Internal server error"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT-токен, полученный после аутентификации. 
+        Передаётся в заголовке: `Authorization: Bearer <token>`
+
+  schemas:
+    CoordinatesResponse:
+      type: object
+      description: |
+        Словарь, где ключ — `userId` в виде строки, 
+        значение — координаты или `null`, если данных ещё нет.
+      additionalProperties:
+        oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/Coordinates'
+      example:
+        "1001":
+          longitude: 37.6173
+          latitude: 55.7558
+        "1002": null
+
+    Coordinates:
+      type: object
+      required:
+        - longitude
+        - latitude
+      properties:
+        longitude:
+          type: number
+          format: double
+          description: Географическая долгота (WGS84)
+          example: 37.6173
+          minimum: -180
+          maximum: 180
+        latitude:
+          type: number
+          format: double
+          description: Географическая широта (WGS84)
+          example: 55.7558
+          minimum: -90
+          maximum: 90
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Машиночитаемый код ошибки
+          enum:
+            - BAD_REQUEST
+            - AUTH_FAILED
+            - FORBIDDEN
+            - NOT_FOUND
+            - CONFLICT
+            - INTERNAL_ERROR
+          example: FORBIDDEN
+        message:
+          type: string
+          description: Человекочитаемое описание ошибки
+          example: "Only judge can view the coordinates of the participants"
+
+x-webhooks: {}
